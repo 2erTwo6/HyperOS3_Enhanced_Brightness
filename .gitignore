@@ -1,0 +1,10 @@
+reference/
+analysis/
+module/classes/
+module/dexout/
+module/build.log
+module/r8.jar
+module/android.jar
+module/signing.keystore
+module/*.apk
+*.log
