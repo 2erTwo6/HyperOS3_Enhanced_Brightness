@@ -43,6 +43,7 @@ public class Hook implements IXposedHookLoadPackage {
     private static final String P_AB_ENABLE = "persist.hyperbrightness.autobr.enable";
     private static final String P_AB_PCT = "persist.hyperbrightness.autobr.pct"; // ×0.1%，1300 = ×1.30
     private static final String P_KNOTS = "persist.hyperbrightness.knots";       // "b:n,b:n,..."（GUI 从 displayconfig XML 提取）
+    private static final String P_DEBUG = "persist.hyperbrightness.debug";       // 诊断日志开关（默认关）
     private static final int DEFAULT_AB_PCT = 1300;                              // 参考仓默认 ×1.30
     private static final int INT_MAX = 16383;                                    // 背光整数数组上限
 
@@ -91,6 +92,11 @@ public class Hook implements IXposedHookLoadPackage {
             hookAutoBrightness(lpp);
         } catch (Throwable t) {
             XposedBridge.log(TAG + ": autobrightness hook failed " + t);
+        }
+        try {
+            hookDiagnostics(lpp);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": diagnostics hook failed " + t);
         }
     }
 
@@ -250,7 +256,7 @@ public class Hook implements IXposedHookLoadPackage {
                         if (depth() <= 1) {
                             int[] stock = ensureStock(param.thisObject);
                             if (stock != null) {
-                                float[] scaled = recomputeNits(raw, stock, k);
+                                float[] scaled = recomputeNits(stock, k);
                                 param.result = scaled;
                                 if (!loggedNits) {
                                     loggedNits = true;
@@ -281,10 +287,11 @@ public class Hook implements IXposedHookLoadPackage {
             protected void afterHookedMethod(MethodHookParam param) {
                 try {
                     if (k <= 1.0001f) return;
-                    int id = argId(param);
+                    if (!isTargetId(param)) return;   // 只处理目标数组，避免对无关资源做探测
                     Object ta = param.result;
                     if (ta == null) return;
                     if (depth() > 1) return;   // 处于我们自己的 getFloatArray 链内，避免双变换
+                    int id = argId(param);
                     if (transformTypedArray(ta, id, param.thisObject)) {
                         if (id == idBrt && !loggedBrt) {
                             loggedBrt = true;
@@ -330,42 +337,50 @@ public class Hook implements IXposedHookLoadPackage {
     private static final int TYPE_INT_HEX = 0x11;
     private static final int TYPE_FLOAT = 0x04;
 
-    /** TypedArray 原地变换：mData 布局 = stride(AssetManager.STYLE_NUM_ENTRIES) × len，
-     *  每元素 [type, data, ...]；背光表整型、nits 浮点按参考仓数学改写。
-     *  布局自校验：先比对首元素 TypedArray 读数与 mData 原始位，不符则放弃（不动内存）。 */
+    /** TypedArray 原地变换。mData 元素布局 stride 本机探测（本机 ROM 为 7，AOSP 常见 6）：
+     *  用元素 1 的 TypedArray 读数与 mData 原始位比对确定 stride，探测不到则放弃不动内存。 */
     private static boolean transformTypedArray(Object ta, int id, Object res) {
         try {
             int len = ((Number) XposedHelpers.callMethod(ta, "length")).intValue();
             if (len <= 0) return false;
             int[] data = (int[]) readFieldChain(ta.getClass(), ta, "mData");
-            int stride = staticIntChain("android.content.res.AssetManager", "STYLE_NUM_ENTRIES", 6);
-            int typeOff = staticIntChain("android.content.res.AssetManager", "STYLE_TYPE", 0);
-            int dataOff = staticIntChain("android.content.res.AssetManager", "STYLE_DATA", 1);
-            if (stride <= 1) return false;
+            int typeOff = 0, dataOff = 1;
+            boolean isFloat = (id == idNits);
+            // stride 自动探测：元素 0 的 type/data 与 stride 无关（0 偏移起），
+            // 用元素 1 的 TypedArray 读数比对定位真实步进。
+            int ptype = data[typeOff];
+            int stride = -1;
+            for (int s : new int[]{6, 7, 8, 9, 5, 4, 10}) {
+                if (s + dataOff >= data.length) break;
+                int t1 = data[s + typeOff];
+                if (isFloat) {
+                    if (t1 != TYPE_FLOAT) continue;
+                    float f1 = Float.intBitsToFloat(data[s + dataOff]);
+                    float r1 = ((Number) XposedHelpers.callMethod(ta, "getFloat", 1, Float.NaN)).floatValue();
+                    if (f1 == r1) {
+                        stride = s;
+                        break;
+                    }
+                } else {
+                    if (t1 != TYPE_INT_DEC && t1 != TYPE_INT_HEX) continue;
+                    int v1 = data[s + dataOff];
+                    int r1 = ((Number) XposedHelpers.callMethod(ta, "getInt", 1, Integer.MIN_VALUE)).intValue();
+                    if (v1 == r1) {
+                        stride = s;
+                        break;
+                    }
+                }
+            }
+            if (stride <= 1) {
+                XposedBridge.log(TAG + ": AB TypedArray stride 探测失败，放弃变换");
+                return false;
+            }
             int[] stock = null;
             if (id == idNits) {
                 stock = ensureStock(res);
                 if (stock == null) return false;
             }
-            // 自校验：TypedArray 读数必须与 mData 首元素一致（验证 stride 假设）
-            int ptype = data[typeOff];          // 第 0 个元素的 type
-            if (id == idBrt && (ptype == TYPE_INT_DEC || ptype == TYPE_INT_HEX)) {
-                int pv = data[dataOff];
-                int cv = ((Number) XposedHelpers.callMethod(ta, "getInt", 0, Integer.MIN_VALUE)).intValue();
-                if (cv != Integer.MIN_VALUE && pv != cv) {
-                    XposedBridge.log(TAG + ": AB TypedArray 布局校验失败(int " + pv + "!=" + cv + ")，放弃");
-                    return false;
-                }
-            } else if (id == idNits && ptype == TYPE_FLOAT) {
-                float pf = Float.intBitsToFloat(data[dataOff]);
-                float cf = ((Number) XposedHelpers.callMethod(ta, "getFloat", 0, Float.NaN)).floatValue();
-                if (!Float.isNaN(cf) && pf != cf) {
-                    XposedBridge.log(TAG + ": AB TypedArray 布局校验失败(float " + pf + "!=" + cf + ")，放弃");
-                    return false;
-                }
-            } else {
-                return false;   // 类型不符合预期（空数组/其它类型）
-            }
+            float[] nitsArr = (id == idNits) ? recomputeNits(stock, k) : null;
             int changed = 0;
             for (int i = 0; i < len; i++) {
                 int off = i * stride;
@@ -375,12 +390,14 @@ public class Hook implements IXposedHookLoadPackage {
                     data[off + dataOff] = (int) Math.min(INT_MAX, Math.max(1, Math.round(v * k)));
                     changed++;
                 } else if (id == idNits && type == TYPE_FLOAT) {
-                    // nits 不读旧值：直接由 原厂背光 ×K 经面板样条重算（与参考仓一致）
-                    float newf = Math.min(1f, (stock[i] - 1) / 16383.75f * k);
-                    float n = Math.min(knots[knots.length - 1][1], Math.max(knots[0][1], nitsOf(newf)));
-                    data[off + dataOff] = Float.floatToRawIntBits(n);
+                    // nits 不读旧值：整组由原厂背光 ×K 重算（含严格递增尾部）后逐元素写入
+                    data[off + dataOff] = Float.floatToRawIntBits(nitsArr[i]);
                     changed++;
                 }
+            }
+            if (changed > 0 && id == idNits) {
+                XposedBridge.log(TAG + ": AB nitsArr head=" + headF8(nitsArr)
+                        + " " + violations(nitsArr) + " stride=" + stride);
             }
             return changed > 0;
         } catch (Throwable t) {
@@ -419,6 +436,127 @@ public class Hook implements IXposedHookLoadPackage {
         return fallback;
     }
 
+    /** 诊断（默认关闭，persist.hyperbrightness.debug=1 时启用）：
+     *  ROM 曲线校验实参（含违规点定位）+ DDC 返回的数组 + create() 策略选择。 */
+    private void hookDiagnostics(XC_LoadPackage.LoadPackageParam lpp) {
+        if (propInt(P_DEBUG, 0) != 1) return;
+        try {
+            Class<?> bms = XposedHelpers.findClass(
+                    "com.android.server.display.BrightnessMappingStrategy", lpp.classLoader);
+            XposedBridge.hookAllMethods(bms, "isValidMapping", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        float[] x = (float[]) param.args[0];
+                        float[] y = (float[]) param.args[1];
+                        XposedBridge.log(TAG + ": isValidMapping x[len="
+                                + (x == null ? -1 : x.length) + " head=" + headF8(x)
+                                + "] y[len=" + (y == null ? -1 : y.length) + " head=" + headF8(y)
+                                + " " + violations(y) + "]");
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": diag isValidMapping " + t);
+                    }
+                }
+            });
+            XposedBridge.hookAllMethods(bms, "create", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    try {
+                        XposedBridge.log(TAG + ": create -> " + (param.result == null
+                                ? "null（自动亮度将不可用！）"
+                                : param.result.getClass().getSimpleName()));
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": diag create " + t);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": diag hook failed " + t);
+        }
+        try {
+            Class<?> ddc = XposedHelpers.findClass(
+                    "com.android.server.display.DisplayDeviceConfig", lpp.classLoader);
+            XposedBridge.hookAllMethods(ddc, "getAutoBrightnessBrighteningLevelsNits", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    try {
+                        float[] y = (float[]) param.result;
+                        XposedBridge.log(TAG + ": DDC.getNits -> [len="
+                                + (y == null ? -1 : y.length) + " head=" + headF8(y)
+                                + " tail=" + tailF3(y) + "]");
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": diag DDC.getNits " + t);
+                    }
+                }
+            });
+            XposedBridge.hookAllMethods(ddc, "getAutoBrightnessBrighteningLevels", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    try {
+                        int[] a = (int[]) param.result;
+                        XposedBridge.log(TAG + ": DDC.getBrt[len="
+                                + (a == null ? -1 : a.length) + " head="
+                                + (a == null ? "null" : java.util.Arrays.toString(
+                                        java.util.Arrays.copyOfRange(a, 0, Math.min(6, a.length))))
+                                + "]");
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + ": diag DDC.getBrt " + t);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + ": diag DDC hook failed " + t);
+        }
+    }
+
+    /** 数组单调性诊断：首个下降点 / 首个平台点（索引+前后值）。 */
+    private static String violations(float[] a) {
+        if (a == null || a.length == 0) return "null-arr";
+        String dec = null, eq = null;
+        for (int i = 1; i < a.length; i++) {
+            if (a[i] < a[i - 1]) {
+                dec = "dec@" + i + "(" + a[i - 1] + ">" + a[i] + ")";
+                break;
+            }
+        }
+        for (int i = 1; i < a.length; i++) {
+            if (a[i] == a[i - 1]) {
+                eq = "plateau@" + i;
+                break;
+            }
+        }
+        return (dec == null ? "nodec" : dec) + " " + (eq == null ? "noeq" : eq);
+    }
+
+    private static String headF8(float[] a) {
+        if (a == null || a.length == 0) return "null";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < Math.min(8, a.length); i++) {
+            sb.append(i == 0 ? "" : ",").append(a[i]);
+        }
+        return sb.append("]").toString();
+    }
+
+    private static String headF3(float[] a) {
+        if (a == null || a.length == 0) return "null";
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < Math.min(3, a.length); i++) {
+            sb.append(i == 0 ? "" : ",").append(a[i]);
+        }
+        return sb.append("]").toString();
+    }
+
+    private static String tailF3(float[] a) {
+        if (a == null || a.length == 0) return "null";
+        StringBuilder sb = new StringBuilder("[");
+        boolean first = true;
+        for (int i = Math.max(0, a.length - 3); i < a.length; i++) {
+            sb.append(first ? "" : ",").append(a[i]);
+            first = false;
+        }
+        return sb.append("]").toString();
+    }
+
     /** 原厂背光整数表：优先用首次拦截缓存，没有则防递归地再读一次原值。 */
     private static int[] ensureStock(Object res) {
         int[] s = stockBrt;
@@ -447,15 +585,27 @@ public class Hook implements IXposedHookLoadPackage {
         return out;
     }
 
-    /** nits 重算：等价于参考仓 rebuild_boost.py —— old_f=(int-1)/16383.75, new_f=min(1,old_f*K),
-     *  nits = 样条(new_f)，clamp [结点最低 nits, 结点最高 nits]。 */
-    private static float[] recomputeNits(float[] raw, int[] stock, float kk) {
+    /** nits 重算（整组，Resources.getFloatArray 路径与 TypedArray 路径共用）。
+     *  饱和段摊开：从尾部找等值平台，以可用余量均分步进严格递增，最后一个点仍精确为峰值。 */
+    private static float[] recomputeNits(int[] stock, float kk) {
         float lo = knots[0][1], hi = knots[knots.length - 1][1];
-        float[] out = new float[raw.length];
-        for (int i = 0; i < raw.length; i++) {
-            float oldF = (stock[i] - 1) / 16383.75f;
-            float newF = Math.min(1f, oldF * kk);
-            out[i] = Math.min(hi, Math.max(lo, nitsOf(newF)));
+        int n = stock.length;
+        float[] out = new float[n];
+        for (int i = 0; i < n; i++) {
+            float newf = Math.min(1f, (stock[i] - 1) / 16383.75f * kk);
+            out[i] = Math.min(hi, Math.max(lo, nitsOf(newf)));
+        }
+        int s = n - 1;
+        while (s > 0 && out[s - 1] >= out[s]) s--;
+        int m = n - s;
+        if (m >= 2) {
+            float base = (s > 0) ? out[s - 1] : lo;
+            float step = (hi - base) / m;
+            if (step < 0.001f) step = 0.001f;
+            for (int i = s; i < n; i++) {
+                out[i] = Math.min(hi, base + step * (i - s + 1));
+            }
+            out[n - 1] = hi;
         }
         return out;
     }

@@ -40,6 +40,7 @@ hook system_server `com.android.server.display.DisplayPowerControllerImpl.init()
 | `persist.hyperbrightness.sunlight.target` | 阳光绝对目标 float×1e6 | — |
 | `persist.hyperbrightness.sunlight.pct` | 相对出厂 ×0.1%（1068=106.8%） | 1068 |
 | `persist.hyperbrightness.knots` | 面板结点 `b1:n1,b2:n2,...` | dash 内置 |
+| `persist.hyperbrightness.debug` | 诊断日志（ROM 校验/策略选择） | 0 |
 
 阳光旧模块兼容：`persist.sunlightboost.target` / `persist.sunlightboost.pct`
 只读兜底（新属性未设置时才读取，保存 GUI 配置后即被覆盖）。
@@ -84,16 +85,16 @@ LSPosed 日志过滤 `HBrLSP:` 可见：
 ### Redmi Turbo 5 Max (dash, OS3.0.305) 实测结果
 
 - 阳光上限：出厂 0.593761 → 目标 1.0，`dumpsys display` 中 `mMaxManualBoostBrightness=1.0` ✓
-- 自动亮度：本 ROM 的 nits 数组经 `Resources.obtainTypedArray` 读取
-  （`BrightnessMappingStrategy.getFloatArray` 风格），模块对 `TypedArray.mData`
-  （stride=6）原地变换，带首元素读数自校验，变换失败自动放弃不动内存 ✓
-- 变换后 ROM 的 `BrightnessMappingStrategy.create` 从 `PhysicalMappingStrategy`
-  回退到 `SimpleMappingStrategy`（MIUI 对 nits 数组的单调性校验更严，重算后的
-  顶部 3500-nit 平台触发回退）——但 Simple 路径用的背光表就是 ×K 后的数组，
-  `dumpsys` 中 `SimpleMappingStrategy.mSpline` 已确认为增强值
-  （如 lux=0 背光 0.00238→0.00311），自动亮度增强同样生效 ✓
-- `isValidMapping` 对 nits/背光均允许平台值（非严格递增），K 在 1.0–2.0 范围内
-  回退行为稳定，不会出现"曲线失效"的空策略
+- 自动亮度：本 ROM 的 nits 数组经 `Resources.obtainTypedArray` 读取，
+  模块对 `TypedArray.mData` 原地变换；**元素 stride 本机自动探测**（本机 = 7，
+  AOSP 常见 6，靠元素 1 的 TypedArray 读数比对确定），探测不到则放弃不动内存 ✓
+- nits 重算顶部饱和段以余量均分步进**严格递增**逼近面板峰值（最后一个点仍精确
+  3500 nit），不产生平台 → ROM 的 `isValidMapping` 校验通过 →
+  **保留原厂 `PhysicalMappingStrategy`**（不再回退 Simple），曲线即增强后的 nits 表：
+  `mBrightnessSpline=[(0.0, 4.679…), (1.0, 11.095…), …]`（原厂 3.5/6.43…）✓
+- 背光表（int[] 结果数组直改）同样 ×K；`isValidMapping` 允许平台值（非严格递增），
+  K 在 1.0–2.0 范围内稳定
+- 附带诊断：`persist.hyperbrightness.debug=1` 可打开 ROM 校验/策略选择日志
 
 ## 回滚 / 卸载
 
