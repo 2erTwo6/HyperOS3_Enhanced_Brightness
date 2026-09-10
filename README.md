@@ -112,6 +112,7 @@ LSPosed 日志过滤 `HBrLSP:` 可见：
   刻度来自 dumpsys 标定表）+ 开关按钮
 - 读数面板：当前 prop、出厂/生效阳光上限、DBV、皮肤温度、旧模块冲突提示
 - **软重启按钮**：重启 system_server 应用全部改动
+- 底部：构建版本 / 构建日期（build.sh 构建时注入，可用 `HBR_VERSION_NAME` 覆盖）+ GitHub 仓库跳转按钮
 
 ## 构建产物结构
 

@@ -2,7 +2,9 @@ package hbr;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -119,6 +121,31 @@ public class MainActivity extends Activity {
                 .setNegativeButton("取消", null)
                 .show());
         root.addView(restart);
+
+        // ---- 底部：构建信息 + GitHub 仓库 ----
+        TextView ver = new TextView(this);
+        ver.setText("构建版本：" + BuildInfo.VERSION);
+        ver.setTextSize(12);
+        ver.setPadding(0, dp(16), 0, dp(2));
+        root.addView(ver);
+
+        TextView bdate = new TextView(this);
+        bdate.setText("构建日期：" + BuildInfo.DATE);
+        bdate.setTextSize(12);
+        bdate.setPadding(0, 0, 0, dp(8));
+        root.addView(bdate);
+
+        Button github = new Button(this);
+        github.setText("GitHub 仓库");
+        github.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://github.com/2erTwo6/HyperOS3_Enhanced_Brightness")));
+            } catch (Throwable t) {
+                Toast.makeText(MainActivity.this, "无法打开浏览器", Toast.LENGTH_SHORT).show();
+            }
+        });
+        root.addView(github);
 
         setContentView(scroll);
         installSliders();

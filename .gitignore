@@ -2,6 +2,7 @@ reference/
 analysis/
 module/classes/
 module/dexout/
+module/gen/
 module/build.log
 module/r8.jar
 module/android.jar

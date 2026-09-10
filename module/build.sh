@@ -24,7 +24,21 @@ if [ ! -s android.jar ]; then
     rm -f platform.zip
     [ -s android.jar ] || { echo "android.jar extract failed"; exit 1; }
 fi
-mkdir -p classes dexout
-javac --release 8 -cp android.jar -d classes $(find src -name '*.java')
+mkdir -p classes dexout gen/hbr
+# 构建版本/日期：可用 HBR_VERSION_NAME / HBR_VERSION_CODE 环境变量覆盖，默认 1.0 / 1
+VER_NAME=${HBR_VERSION_NAME:-1.0}
+VER_CODE=${HBR_VERSION_CODE:-1}
+BUILD_DATE=$(date -u +%Y-%m-%d)
+cat > gen/hbr/BuildInfo.java <<EOF
+package hbr;
+
+/** 构建时生成的版本信息（build.sh 注入，勿手改）。 */
+public final class BuildInfo {
+    public static final String VERSION = "$VER_NAME";
+    public static final String DATE = "$BUILD_DATE";
+    private BuildInfo() {}
+}
+EOF
+javac --release 8 -cp android.jar -d classes $(find src -name '*.java') gen/hbr/BuildInfo.java
 java -cp r8.jar com.android.tools.r8.D8 --release --min-api 29 --lib android.jar --output dexout classes/hbr/*.class
-python3 build_apk.py
+HBR_VERSION_NAME="$VER_NAME" HBR_VERSION_CODE="$VER_CODE" python3 build_apk.py
