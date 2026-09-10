@@ -127,4 +127,4 @@ module/
 
 ## License / 致谢
 
-MIT。实现逻辑来自 2erTwo6 的上述两个项目（MIT），本项目为其 LSPosed 合并移植版。
+MIT
