@@ -1,10 +1,5 @@
 # HyperOS Enhanced Brightness
 
-两个开源项目的合并 LSPosed 模块（借鉴其实现逻辑重写）：
-
-- [2erTwo6/Hyper-Sunlight-Unlocker](https://github.com/2erTwo6/Hyper-Sunlight-Unlocker)（LSPosed 阳光模式上限解锁）
-- [2erTwo6/HyperOS_autobrightness_boost](https://github.com/2erTwo6/HyperOS_autobrightness_boost)（Magisk 自动亮度曲线拔高）
-
 适配范围：`ro.mi.os.version.name` 以 `OS3` 开头的 MIUI/HyperOS（参照机 Redmi Turbo 5 Max / dash，OS3.0.305）。非 OS3 自动不 Hook。
 
 ## 功能
