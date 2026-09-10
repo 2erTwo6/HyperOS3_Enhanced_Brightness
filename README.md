@@ -1,5 +1,7 @@
 # HyperOS Enhanced Brightness
 
+[![Build APK](https://github.com/2erTwo6/HyperOS3_Enhanced_Brightness/actions/workflows/build.yml/badge.svg)](https://github.com/2erTwo6/HyperOS3_Enhanced_Brightness/actions/workflows/build.yml)
+
 适配范围：`ro.mi.os.version.name` 以 `OS3` 开头的 MIUI/HyperOS（参照机 Redmi Turbo 5 Max / dash，OS3.0.305）。非 OS3 自动不 Hook。
 
 ## 功能
@@ -46,6 +48,11 @@ hook system_server `com.android.server.display.DisplayPowerControllerImpl.init()
 
 需要 JDK 17、python3、curl。`./build.sh`（自动下载 r8/D8 工具链 + 官方 android.jar，编译、
 打包 AXML 清单并 v1 签名）。产物：`HyperOS-Enhanced-Brightness.apk`。
+
+GitHub Actions 已配置（`.github/workflows/build.yml`）：push 到 `main`、PR、手动触发
+（workflow_dispatch）都会自动构建并上传 APK 工件；打 `v*` tag（如 `v1.2.3`）时自动
+以 tag 为版本号构建并发布 GitHub Release。签名 keystore 由 CI 缓存复用，保证每次构建
+同一把钥匙，用户可直接覆盖安装。
 
 ## 安装
 
