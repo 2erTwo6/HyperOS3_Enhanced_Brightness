@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
         scroll.addView(root);
 
         TextView title = new TextView(this);
-        title.setText("HyperOS Enhanced Brightness\n阳光上限 + 自动亮度增强（合并版）");
+        title.setText("HyperOS Enhanced Brightness");
         title.setTextSize(19);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         root.addView(title);
@@ -119,18 +119,6 @@ public class MainActivity extends Activity {
                 .setNegativeButton("取消", null)
                 .show());
         root.addView(restart);
-
-        TextView note = new TextView(this);
-        note.setTextSize(11);
-        note.setTextColor(0xFF888888);
-        note.setPadding(0, dp(14), 0, 0);
-        note.setText("配置经 persist.hyperbrightness.* 属性传递（保存时需 root 授权一次）。"
-                + "自动亮度：拦截 system_server 资源数组读取，背光表 ×K、nits 按面板样条重算，"
-                + "等效于 autobrightness_boost 的 arsc 补丁；改动需软重启生效。"
-                + "阳光上限：hook DisplayPowerControllerImpl.init 改 mMaxManualBoostBrightness。"
-                + "若设备仍装有旧模块 Hyper-Sunlight-Unlocker，请在 LSPosed 停用它，避免双重修改。"
-                + "非 OS3 系统模块自动不 Hook。");
-        root.addView(note);
 
         setContentView(scroll);
         installSliders();
