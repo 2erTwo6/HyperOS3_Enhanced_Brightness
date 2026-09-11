@@ -40,7 +40,7 @@ hook system_server `com.android.server.display.DisplayPowerControllerImpl.init()
 阳光旧模块兼容：`persist.sunlightboost.target` / `persist.sunlightboost.pct`
 只读兜底（新属性未设置时才读取，保存 GUI 配置后即被覆盖）。
 
-**所有改动需软重启 system_server（GUI 内按钮）或重启后生效。**
+**所有改动需软重启（GUI 内按钮：同时重启 system_server 与 SystemUI）或重启后生效。**
 
 ## 构建
 
@@ -115,7 +115,9 @@ Material 3 风格：设计 token 跟随系统深浅色，卡片圆角 + 描边 +
   刻度来自 dumpsys 标定表）+ 滑块 + 开关；无标定表自动回落倍率模式
 - **③ 设备读数**：键值行列表——系统版本、两个属性状态、DBV/占比、皮肤温度、
   出厂/生效阳光上限、knots 来源、旧模块冲突告警（警告色）
-- 底部：**软重启 system_server** 主按钮 + **刷新读数** 次按钮 + 构建版本/日期 + 仓库入口
+- 底部：**软重启 system_server + SystemUI** 主按钮 + **刷新读数** 次按钮 + 构建版本/日期 + 仓库入口
+  （软重启先杀 SystemUI 再杀 system_server：SystemUI 若活过 framework 重启会残留旧状态，
+  顺序不能反；重启后由新的 system_server 把两者重新拉起）
 
 界面预览（静态 mock，浅色/深色）：`_preview/ui.html` / `_preview/ui.png`
 

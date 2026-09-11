@@ -172,7 +172,7 @@ public class MainActivity extends Activity {
         root.addView(abCard(), marginTop(dp(18)));
         root.addView(slCard(), marginTop(dp(12)));
         root.addView(readoutCard(), marginTop(dp(12)));
-        root.addView(filledButton("软重启 system_server", cAccent, onAccent(),
+        root.addView(filledButton("软重启 system_server + SystemUI", cAccent, onAccent(),
                 v -> confirmRestart()), marginTop(dp(18)));
         root.addView(filledButton("刷新读数", cSurfaceVar, cAccent,
                 v -> refresh()), marginTop(dp(10)));
@@ -1006,12 +1006,23 @@ public class MainActivity extends Activity {
 
     // ---------- 软重启 ----------
 
+    /**
+     * 软重启命令：先杀 SystemUI，再杀 system_server。顺序不能反——
+     * SystemUI 若活过 framework 重启，会带着旧状态残留（实测有 bug）；
+     * 先杀掉它，重启后的 system_server 会把两者都重新拉起。
+     */
+    private static final String CMD_SOFT_REBOOT =
+            "killall com.android.systemui 2>/dev/null; "
+                    + "for p in $(pidof com.android.systemui 2>/dev/null); do kill -9 $p 2>/dev/null; done; "
+                    + "killall system_server";
+
     private void confirmRestart() {
         final AlertDialog d = new AlertDialog.Builder(this)
                 .setTitle("软重启")
-                .setMessage("将重启 system_server：屏幕短暂黑屏、所有应用重新加载，"
-                        + "等效于重启但更快。自动亮度曲线与阳光上限在此时生效。\n\n继续？")
-                .setPositiveButton("重启", (dlg, w) -> su("killall system_server"))
+                .setMessage("将同时重启 system_server 与 SystemUI：屏幕短暂黑屏、"
+                        + "状态栏/导航栏重新加载、所有应用重启，等效于重启但更快。"
+                        + "自动亮度曲线与阳光上限在此时生效。\n\n继续？")
+                .setPositiveButton("重启", (dlg, w) -> su(CMD_SOFT_REBOOT))
                 .setNegativeButton("取消", null)
                 .create();
         d.setOnShowListener(x -> {
