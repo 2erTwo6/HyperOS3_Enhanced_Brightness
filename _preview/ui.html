@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>HBR 设置界面预览</title>
+<style>
+  /* 与 MainActivity.java 的 token / 尺寸一一对应，仅用于预览截图 */
+  :root {
+    --bg:#F4F6FA; --surface:#FFFFFF; --surface-var:#EDF1F7; --outline:#E1E7EF;
+    --text:#111720; --dim:#525C6A; --accent:#2A6DF4; --accent-soft:#E8F0FE;
+    --sun:#E08A00; --sun-soft:#FDF3E0; --warn:#D93025; --on-accent:#FFFFFF;
+    --off:#C9D2DE;
+  }
+  .dark {
+    --bg:#0E1116; --surface:#161B22; --surface-var:#1E242D; --outline:#272E38;
+    --text:#E9EEF5; --dim:#9AA6B4; --accent:#6EA8FF; --accent-soft:#17253C;
+    --sun:#FFC24D; --sun-soft:#2E2413; --warn:#FF8A80; --on-accent:#0B1220;
+    --off:#39414D;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#5b6472; padding:26px; display:flex; gap:30px; align-items:flex-start;
+         font-family:"Noto Sans CJK SC","Source Han Sans SC",Roboto,"PingFang SC",sans-serif; }
+  .phone { width:412px; background:var(--bg); color:var(--text); border-radius:26px;
+           overflow:hidden; box-shadow:0 18px 50px rgba(0,0,0,.45); }
+  .status { height:30px; display:flex; align-items:center; justify-content:space-between;
+            padding:0 18px; font-size:12px; color:var(--dim); }
+  .screen { padding:18px 18px 30px; }
+  .title { font-size:23px; font-weight:600; }
+  .subtitle { font-size:12.5px; color:var(--dim); margin-top:5px; }
+  .card { background:var(--surface); border:1px solid var(--outline); border-radius:20px;
+          padding:16px 16px 14px; margin-top:16px; box-shadow:0 1px 2px rgba(0,0,0,.06); }
+  .card.first { margin-top:18px; }
+  .head { display:flex; align-items:center; }
+  .icon { width:36px; height:36px; border-radius:12px; display:flex; align-items:center;
+          justify-content:center; font-size:16px; flex:0 0 36px; }
+  .icon.acc { background:var(--accent-soft); color:var(--accent); }
+  .icon.sun { background:var(--sun-soft); color:var(--sun); }
+  .titles { margin-left:12px; flex:1; }
+  .titles b { font-size:15px; font-weight:600; display:block; }
+  .titles span { font-size:11.5px; color:var(--dim); display:block; margin-top:3px; }
+  .pill { width:50px; height:29px; border-radius:15px; position:relative; margin-left:10px;
+          flex:0 0 50px; display:flex; justify-content:flex-end; padding:3.5px; background:var(--accent); }
+  .pill.off { background:var(--off); justify-content:flex-start; }
+  .pill.sun { background:var(--sun); }
+  .pill i { display:block; width:22px; height:22px; border-radius:50%; background:#fff; }
+  .value { display:flex; align-items:flex-end; margin-top:12px; }
+  .value b { font-size:30px; font-weight:600; line-height:1; }
+  .value span { font-size:12px; color:var(--dim); margin:0 0 5px 8px; }
+  .track { position:relative; height:22px; margin-top:14px; }
+  .track .rail { position:absolute; top:8px; left:4px; right:4px; height:6px; border-radius:3px;
+                 background:var(--outline); }
+  .track .fill { position:absolute; top:8px; left:4px; height:6px; border-radius:3px;
+                 background:var(--accent); }
+  .track.sun .fill { background:var(--sun); }
+  .track .knob { position:absolute; top:2px; width:22px; height:22px; border-radius:50%;
+                 background:#fff; border:3px solid var(--accent); margin-left:-11px; }
+  .track.sun .knob { border-color:var(--sun); }
+  .range { display:flex; justify-content:space-between; font-size:11.5px; color:var(--dim); margin-top:6px; }
+  .hint { font-size:11.5px; color:var(--dim); margin-top:9px; }
+  .rows { margin-top:6px; }
+  .row { display:flex; align-items:center; padding:9px 0; border-top:1px solid var(--outline); }
+  .row:first-child { border-top:none; }
+  .row .k { font-size:12px; color:var(--dim); padding-right:10px; }
+  .row .v { font-size:12.5px; flex:1; text-align:right; font-family:"Roboto Mono",monospace; }
+  .row .v.med { font-weight:600; font-family:inherit; }
+  .row .v.warn { color:var(--warn); font-weight:600; font-family:inherit; }
+  .btn { margin-top:18px; border-radius:14px; text-align:center; font-size:14.5px; font-weight:600;
+         padding:15px 12px; }
+  .btn.primary { background:var(--accent); color:var(--on-accent); }
+  .btn.secondary { background:var(--surface-var); color:var(--accent); margin-top:10px; }
+  .foot { margin-top:18px; font-size:11.5px; color:var(--dim); }
+  .git { margin-top:9px; font-size:12.5px; color:var(--accent); font-weight:600; }
+</style>
+</head>
+<body>
+<template id="ui">
+  <div class="phone">
+    <div class="status"><span>10:24</span><span>5G ▮ 82%</span></div>
+    <div class="screen">
+      <div class="title">HyperOS 增强亮度</div>
+      <div class="subtitle">阳光上限解锁 · 自动亮度曲线增幅</div>
+
+      <div class="card first">
+        <div class="head">
+          <div class="icon acc">◐</div>
+          <div class="titles"><b>自动亮度曲线增幅</b><span>系统亮度曲线整体拔高</span></div>
+          <div class="pill"><i></i></div>
+        </div>
+        <div class="value"><b>130.0%</b><span>倍率</span></div>
+        <div class="track">
+          <div class="rail"></div><div class="fill" style="width:28%"></div>
+          <div class="knob" style="left:28%"></div>
+        </div>
+        <div class="range"><span>100%</span><span>200%</span></div>
+        <div class="hint">同一环境光下更亮 · 改动需软重启生效</div>
+      </div>
+
+      <div class="card">
+        <div class="head">
+          <div class="icon sun">☀</div>
+          <div class="titles"><b>阳光模式手动上限</b><span>mMaxManualBoostBrightness 解锁</span></div>
+          <div class="pill sun"><i></i></div>
+        </div>
+        <div class="value"><b>≈ 1120 nit</b></div>
+        <div class="track sun">
+          <div class="rail"></div><div class="fill" style="width:42%"></div>
+          <div class="knob" style="left:42%"></div>
+        </div>
+        <div class="range"><span>780 nit</span><span>1600 nit</span></div>
+        <div class="hint">出厂上限 ≈ 780 nit · 改动需软重启生效</div>
+      </div>
+
+      <div class="card">
+        <div class="head">
+          <div class="icon acc">◎</div>
+          <div class="titles"><b>设备读数</b><span>实时读取 root 属性与面板状态</span></div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">系统版本</span><span class="v">OS3.0.305.0</span></div>
+          <div class="row"><span class="k">自动亮度增幅</span><span class="v">已启用 · 130.0%</span></div>
+          <div class="row"><span class="k">阳光上限</span><span class="v">已启用 · target=0.6642</span></div>
+          <div class="row"><span class="k">knots 属性</span><span class="v">已写入 ✓</span></div>
+          <div class="row"><span class="k">当前 DBV</span><span class="v">4186 / 16383（25%）</span></div>
+          <div class="row"><span class="k">皮肤温度</span><span class="v">32.8 °C</span></div>
+          <div class="row"><span class="k">出厂阳光上限</span><span class="v">0.593761（≈ 780 nit）</span></div>
+          <div class="row"><span class="k">当前生效 boost</span><span class="v med">0.6642（≈ 1120 nit）</span></div>
+          <div class="row"><span class="k">knots 来源</span><span class="v">本机 displayconfig</span></div>
+        </div>
+      </div>
+
+      <div class="btn primary">软重启 system_server</div>
+      <div class="btn secondary">刷新读数</div>
+      <div class="foot">构建版本 1.0 · 2026-09-10</div>
+      <div class="git">GitHub 仓库 →</div>
+    </div>
+  </div>
+</template>
+<script>
+  for (const cls of ['light', 'dark']) {
+    const node = document.getElementById('ui').content.cloneNode(true);
+    node.querySelector('.phone').classList.add(cls);
+    document.body.appendChild(node);
+  }
+</script>
+</body>
+</html>

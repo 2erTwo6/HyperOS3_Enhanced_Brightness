@@ -113,20 +113,29 @@ LSPosed 日志过滤 `HBrLSP:` 可见：
 
 ## GUI（模块桌面图标）
 
-- **① 自动亮度曲线增幅**：100%–200% 滑块（×0.1% 步进）+ 开关按钮；保存时同时把
-  本机 `displayconfig` 的面板结点写入 `knots` 属性；改动需软重启生效
-- **② 阳光模式手动上限**：nit 滑块（下限=出厂上限，读自 `android.miui` 资源真值，
-  刻度来自 dumpsys 标定表）+ 开关按钮
-- 读数面板：当前 prop、出厂/生效阳光上限、DBV、皮肤温度、旧模块冲突提示
-- **软重启按钮**：重启 system_server 应用全部改动
-- 底部：构建版本 / 构建日期（build.sh 构建时注入，可用 `HBR_VERSION_NAME` 覆盖）+ GitHub 仓库跳转按钮
+Material 3 风格：设计 token 跟随系统深浅色，卡片圆角 + 描边 + 轻投影，自绘开关
+（不依赖 MIUI 皮肤，控件全部代码绘制），界面结构：
+
+- **① 自动亮度曲线增幅**：大字号倍率读数 + 100%–200% 滑块（×0.1% 步进）+ 卡片右上开关；
+  保存时同时把本机 `displayconfig` 的面板结点写入 `knots` 属性；改动需软重启生效
+- **② 阳光模式手动上限**：读数为 nit（下限=出厂上限，读自 `android.miui` 资源真值，
+  刻度来自 dumpsys 标定表）+ 滑块 + 开关；无标定表自动回落倍率模式
+- **③ 设备读数**：键值行列表——系统版本、两个属性状态、DBV/占比、皮肤温度、
+  出厂/生效阳光上限、knots 来源、旧模块冲突告警（警告色）
+- 底部：**软重启 system_server** 主按钮 + **刷新读数** 次按钮 + 构建版本/日期
+  （build.sh 构建时注入，可用 `HBR_VERSION_NAME` 覆盖）+ 仓库入口
+
+界面预览（静态 mock，左浅色 / 右深色；源文件 `_preview/ui.html`）：
+
+![GUI 预览](_preview/ui.png)
+
 
 ## 构建产物结构
 
 ```
 module/
 ├── src/hbr/Hook.java         # 两个功能 hook（阳光上限 + 自动亮度变换）
-├── src/hbr/MainActivity.java # 无资源代码式 GUI
+├── src/hbr/MainActivity.java # 无资源代码式 GUI（Material 3 手绘：卡片/开关/滑块）
 ├── src/de/robv/...           # Xposed 桩接口（编译期）
 ├── build.sh                  # 下载 r8/D8 + android.jar，编译 dex，打包签名
 ├── build_apk.py              # 手工 AXML 清单 + assets/xposed_init + v1 签名

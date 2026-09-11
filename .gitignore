@@ -8,4 +8,6 @@ module/r8.jar
 module/android.jar
 module/signing.keystore
 module/*.apk
+_preview/browsers/
+_preview/libs/
 *.log
