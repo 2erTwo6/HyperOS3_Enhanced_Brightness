@@ -88,6 +88,10 @@ public class MainActivity extends Activity {
     private float stockResFloat = -1f;   // 资源里的出厂真值（不随 hook 改变）
     private int abEnable = 1, slEnable = 1, abPct = DEFAULT_AB_PCT;
     private String slTarget = null;
+    private int slRestoredNit = -1;      // 本次构建滑块时恢复出的目标（判用户是否真改动）
+    private int slRestoredPct = -1;
+    private String statusText = "";
+    private int statusKind = 0;
 
     // ---------- 读数模型（parse 填充 → renderReadout 渲染） ----------
 
@@ -525,6 +529,7 @@ public class MainActivity extends Activity {
                 abPct = v;
                 saveProp(P_AB_PCT, String.valueOf(v));
                 writeKnots();
+                renderReadout();
                 toast("已保存 " + pctLabel(v) + "，软重启后生效");
             }
         });
@@ -559,7 +564,8 @@ public class MainActivity extends Activity {
                 return;
             }
             final int fNitLo = nitLo, fNitHi = nitHi;
-            final int cur = loadNit(fNitLo, fNitHi);
+            final int cur = restoreSlNit(fNitLo, fNitHi);
+            slRestoredNit = cur;
             slValue.setText("≈ " + cur + " nit");
             SeekBar bar = new SeekBar(this);
             styleSeekBar(bar, cSun);
@@ -578,13 +584,19 @@ public class MainActivity extends Activity {
                 @Override
                 public void onStopTrackingTouch(SeekBar s) {
                     int nit = fNitLo + s.getProgress();
+                    // 只是点一下滑块（没真改）也会回调 onStopTrackingTouch：
+                    // 不回写，否则一次误触就把 prop 重置成当时的滑块位置（=出厂下限）
+                    if (nit == slRestoredNit) return;
+                    slRestoredNit = nit;
                     float f = nitToFloat(nit);
-                    saveProp(P_SL_TARGET, String.valueOf(Math.round(f * 1000000f)));
+                    slTarget = String.valueOf(Math.round(f * 1000000f));   // 立刻反映到读数卡
+                    saveProp(P_SL_TARGET, slTarget);
                     try {
                         getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                                 .putInt(KEY_NIT, nit).commit();
                     } catch (Throwable ignored) {
                     }
+                    renderReadout();
                     toast("已保存：上限 ≈ " + nit + " nit，软重启后生效");
                 }
             });
@@ -594,6 +606,7 @@ public class MainActivity extends Activity {
                     + " nit · 改动需软重启生效"));
         } else {
             int pct = 1068;
+            slRestoredPct = pct;
             slValue.setText(pctLabel(pct));
             SeekBar bar = new SeekBar(this);
             styleSeekBar(bar, cSun);
@@ -611,8 +624,11 @@ public class MainActivity extends Activity {
 
                 @Override
                 public void onStopTrackingTouch(SeekBar s) {
-                    saveProp(P_SL_PCT, String.valueOf(1000 + s.getProgress()));
-                    toast("已保存 " + pctLabel(1000 + s.getProgress()) + "，软重启后生效");
+                    int p = 1000 + s.getProgress();
+                    if (p == slRestoredPct) return;
+                    slRestoredPct = p;
+                    saveProp(P_SL_PCT, String.valueOf(p));
+                    toast("已保存 " + pctLabel(p) + "，软重启后生效");
                 }
             });
             slBody.addView(bar);
@@ -625,13 +641,56 @@ public class MainActivity extends Activity {
         return (pct / 10) + "." + (pct % 10) + "%";
     }
 
-    private int loadNit(int lo, int hi) {
+    /**
+     * 阳光目标恢复顺序：prop（hook 真正读取的源，重装/清数据都不会丢）→ App prefs
+     * → dumpsys 当前生效值 → 出厂下限。
+     * 早期版本只认 App prefs，而 LSPosed 的 xposedsharedprefs 会把 prefs 重定向到
+     * 别的目录，于是「设置过又变回出厂值」。
+     */
+    private int restoreSlNit(int lo, int hi) {
+        int v = propNitFrom(slTarget, lo, hi);
+        if (v > 0) return v;
+        v = prefNit(lo, hi);
+        if (v > 0) return v;
+        if (stockFloat > 0f) {
+            int eff = floatToNit(stockFloat);
+            if (eff >= lo && eff <= hi) return eff;
+        }
+        return lo;   // 起步 = 阳光模式原厂上限
+    }
+
+    /** prop 字符串（可带旧属性兼容标记 *）→ nit；越界夹紧到范围边界，解析失败返回 -1。 */
+    private int propNitFrom(String raw, int lo, int hi) {
+        if (raw == null || raw.isEmpty() || tblBL == null || tblNit == null) return -1;
         try {
-            int v = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_NIT, lo);
+            String s = raw.endsWith("*") ? raw.substring(0, raw.length() - 1) : raw;
+            float f = Long.parseLong(s.trim()) / 1000000f;
+            if (f <= 0f || f > 1f) return -1;
+            return Math.max(lo, Math.min(hi, floatToNit(f)));
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    private int prefNit(int lo, int hi) {
+        try {
+            int v = getSharedPreferences(PREFS, MODE_PRIVATE).getInt(KEY_NIT, -1);
             if (v >= lo && v <= hi) return v;
         } catch (Throwable ignored) {
         }
-        return lo;   // 起步 = 阳光模式原厂上限
+        return -1;
+    }
+
+    /** prop 里的阳光目标 float（×1e6 已还原）；未设置/非法返回 -1。 */
+    private float savedTargetFloat() {
+        if (slTarget == null || slTarget.isEmpty()) return -1f;
+        try {
+            String s = slTarget.endsWith("*") ? slTarget.substring(0, slTarget.length() - 1) : slTarget;
+            float f = Long.parseLong(s.trim()) / 1000000f;
+            return (f > 0f && f <= 1f) ? f : -1f;
+        } catch (Throwable t) {
+            return -1f;
+        }
     }
 
     // ---------- 标定表换算（厂商分段线性） ----------
@@ -775,10 +834,24 @@ public class MainActivity extends Activity {
 
     private void renderReadout() {
         readoutBox.removeAllViews();
+        computeStatus();
         addRow("系统版本", mOs, 0);
         addRow("自动亮度增幅", (abEnable == 1 ? "已启用 · " : "已停用 · ")
                 + pctLabel(abPct >= 1000 && abPct <= 3000 ? abPct : DEFAULT_AB_PCT), 0);
-        addRow("阳光上限", slText(), 0);
+        // 阳光的三个来源分开写清楚：出厂参考值 ≠ 已保存目标 ≠ 正在运行的值
+        addRow("已保存目标", slText(), 0);
+        addRow("生效状态", statusText, statusKind);
+        if (stockResFloat > 0f) {
+            addRow("出厂上限（参考）", trimFloat(stockResFloat)
+                    + (tblBL != null ? "（≈" + floatToNit(stockResFloat) + " nit）" : "")
+                    + "｜滑块下限", 0);
+        }
+        if (stockFloat > 0f) {
+            addRow("system_server 生效值", trimFloat(stockFloat)
+                    + (tblBL != null ? "（≈" + floatToNit(stockFloat) + " nit）" : ""), 1);
+        } else {
+            addRow("system_server 生效值", "未读到（软重启后出现）", 0);
+        }
         addRow("knots 属性", mKnotsOk ? "已写入 ✓" : "未写入", 0);
         if (mCur >= 0) {
             addRow("当前 DBV", mCur + " / " + mMax + "（" + (mCur * 100 / Math.max(1, mMax)) + "%）", 0);
@@ -786,19 +859,34 @@ public class MainActivity extends Activity {
         if (mSkin > -100000 && mSkin != 0) {
             addRow("皮肤温度", (mSkin / 1000) + "." + ((mSkin % 1000) / 100) + " °C", 0);
         }
-        if (stockResFloat > 0f) {
-            addRow("出厂阳光上限", trimFloat(stockResFloat)
-                    + (tblBL != null ? "（≈" + floatToNit(stockResFloat) + " nit）" : ""), 0);
-        }
-        if (stockFloat > 0f) {
-            addRow("当前生效 boost", trimFloat(stockFloat)
-                    + (tblBL != null ? "（≈" + floatToNit(stockFloat) + " nit）" : ""), 1);
-        } else {
-            addRow("当前生效 boost", "未读到（软重启后出现）", 0);
-        }
         addRow("knots 来源", knotsSpec != null ? "本机 displayconfig" : "内置默认（dash）", 0);
         if (mOldModule) {
             addRow("冲突提醒", "旧模块 com.sunlightboost.lsp 仍安装，请在 LSPosed 停用", 2);
+        }
+    }
+
+    /** 已保存目标 vs 正在运行的 system_server 值，给出明确结论（statusText/statusKind）。 */
+    private void computeStatus() {
+        float tgt = savedTargetFloat();
+        if (tgt <= 0f) {
+            statusText = "未设置目标（按出厂倍率运行）";
+            statusKind = 0;
+            return;
+        }
+        if (stockFloat <= 0f) {
+            statusText = "⚠ 未读到生效值，软重启后确认";
+            statusKind = 2;
+            return;
+        }
+        boolean same = (tblBL != null)
+                ? Math.abs(floatToNit(stockFloat) - floatToNit(tgt)) <= 1
+                : Math.abs(stockFloat - tgt) < 1e-6f;
+        if (same) {
+            statusText = "✓ 已生效（与已保存目标一致）";
+            statusKind = 0;
+        } else {
+            statusText = "⚠ 运行的还是旧值，软重启后才是已保存目标";
+            statusKind = 2;
         }
     }
 
@@ -824,17 +912,11 @@ public class MainActivity extends Activity {
 
     private String slText() {
         StringBuilder sb = new StringBuilder(slEnable == 1 ? "已启用 · " : "已停用 · ");
-        if (slTarget != null && !slTarget.isEmpty()) {
-            boolean compat = slTarget.endsWith("*");
-            String val = compat ? slTarget.substring(0, slTarget.length() - 1) : slTarget;
-            try {
-                float f = Long.parseLong(val) / 1000000f;
-                sb.append("target=").append(trimFloat(f));
-                if (tblBL != null) sb.append("（≈").append(floatToNit(f)).append(" nit）");
-                if (compat) sb.append("（旧属性兼容，保存后覆盖）");
-            } catch (Throwable t) {
-                sb.append(slTarget);
-            }
+        float f = savedTargetFloat();
+        if (f > 0f) {
+            if (tblBL != null && tblNit != null) sb.append("≈ ").append(floatToNit(f)).append(" nit ");
+            sb.append("（").append(trimFloat(f)).append("）");
+            if (slTarget.endsWith("*")) sb.append("旧属性");
         } else {
             sb.append("未设置（默认 106.8%）");
         }

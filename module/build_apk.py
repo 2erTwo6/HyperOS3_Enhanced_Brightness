@@ -63,8 +63,9 @@ DOC = [
     ('/meta-data', []),
     ('meta-data', [(NS_ANDROID, 'name', 'str', 'xposedscope'), (NS_ANDROID, 'value', 'str', 'android')]),
     ('/meta-data', []),
-    ('meta-data', [(NS_ANDROID, 'name', 'str', 'xposedsharedprefs'), (NS_ANDROID, 'value', 'str', 'true')]),
-    ('/meta-data', []),
+    # 不声明 xposedsharedprefs：hook 只读 persist 属性，不需要 XSharedPreferences；
+    # 声明它会让 LSPosed 把本 App 的 SharedPreferences 重定向到 misc 目录，
+    # 造成「设置过又变回出厂值」的双份 prefs 问题。
     ('activity', [
         (NS_ANDROID, 'name', 'str', 'hbr.MainActivity'),
         (NS_ANDROID, 'label', 'str', 'HyperOS Enhanced Brightness'),

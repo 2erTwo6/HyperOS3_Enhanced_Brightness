@@ -119,6 +119,19 @@ Material 3 风格：设计 token 跟随系统深浅色，卡片圆角 + 描边 +
 
 界面预览（静态 mock，浅色/深色）：`_preview/ui.html` / `_preview/ui.png`
 
+### 阳光目标的「记忆」与读数语义
+
+- **恢复顺序**：`persist.hyperbrightness.sunlight.target`（hook 真正读取的源，重装/清数据都不丢）
+  → App SharedPreferences → dumpsys 当前生效值 → 出厂下限；越界值夹紧到边界，不再掉回下限
+- **只在真正改动时回写**：轻点一下滑块（值没变）也会回调 `onStopTrackingTouch`，旧版据此
+  把 prop 覆盖成当时的滑块位置（=出厂下限），于是「设过又变回 800 nit」；现在值未变则不回写
+- **读数分三个来源写清楚**：`已保存目标`（prop）、`生效状态`（目标与运行值是否一致）、
+  `出厂上限（参考）`（厂资源真值，也是滑块下限）、`system_server 生效值`（dumpsys）——
+  出厂参考值不会再被误当成当前上限
+- 清单不再声明 `xposedsharedprefs`：hook 只读 persist 属性，不需要 XSharedPreferences，
+  而该声明会让 LSPosed 把本 App 的 SharedPreferences 重定向到 misc 目录，产生两份互不同步的
+  prefs（正是「没有记忆」的根因之一）
+
 
 ## 构建产物结构
 
